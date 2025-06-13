@@ -1,13 +1,654 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Charity Water Game</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Water Warrior: Survival Stream</title>
+  <style>
+    /* -- CSS Variables: Our little color palette for the game, makes theming easy peasy! -- */
+    :root {
+      --yellow: #FFC907;
+      --blue: #2E9DF7;
+      --light-blue: #8BD1CB; 
+      --green: #4FCB53;
+      --orange: #FF902A;
+      --red: #F5402C;    
+      --dark-green: #159A48; 
+      --pink: #F16061;
+      --light-gray: #f0f0f0;
+      --medium-gray: #ccc;
+      --white: #FFFFFF;
+    }
+
+    * {
+      box-sizing: border-box; /* Makes padding and borders not add to the element's total width/height. Super handy. */
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: sans-serif;
+      background-color: var(--light-blue); 
+      display: flex; /* Flexbox all the things for easy centering and layout! */
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh; 
+      padding: 20px 10px;
+    }
+
+    #gameTitle {
+      font-size: 2em; /* Slightly smaller to fit the box well */
+      color: var(--blue); 
+      margin-bottom: 25px;
+      text-align: center;
+      font-weight: bold;
+      
+      /* -- Boxing up the title for better readability! -- */
+      background-color: var(--white);
+      padding: 10px 25px;
+      border: 4px solid var(--yellow); /* Matchy matchy with the game border */
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* A little lift for the box */
+      display: inline-block; /* So padding and border behave like a proper box around the text */
+    }
+
+    /* -- This wrapper holds the game area and the controls side-by-side on wider screens -- */
+    #gameAndControlsWrapper {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start; /* Keeps them aligned at the top */
+      gap: 20px; 
+      margin-bottom: 15px;
+      max-width: calc(500px + 180px + 20px); /* Game width + Controls width + gap */
+      width: 100%; 
+      justify-content: center; 
+    }
+
+    /* -- The main stage where all the action happens! -- */
+    #game {
+      position: relative; /* Needed for absolute positioning of player, enemies, bullets */
+      width: 100%; 
+      max-width: 500px;
+      height: 500px;
+      background-color: white; 
+      border: 5px solid var(--yellow); 
+      border-radius: 10px;
+      overflow: hidden; /* Anything that tries to escape the game area gets clipped. No escapees! */
+      flex-shrink: 0; 
+    }
+
+    /* -- Our handy side-box for telling players how to play and what to do -- */
+    #sideControlsBox {
+      width: 180px; 
+      padding: 15px;
+      border: 2px solid var(--blue);
+      border-radius: 8px;
+      background-color: var(--light-gray);
+      color: var(--dark-green);
+      flex-shrink: 0; 
+    }
+
+    #sideControlsBox h3, #sideControlsBox h4 {
+      text-align: center;
+      margin-bottom: 10px;
+      color: var(--blue);
+    }
+    #sideControlsBox h4 { /* Slightly different for the "Goal" title */
+        color: var(--green);
+        margin-top: 20px; /* Space above the goal box */
+    }
+
+    #sideControlsBox p {
+      margin: 8px 0;
+      font-size: 0.9em;
+      display: flex; 
+      align-items: center; 
+    }
+
+    /* -- Styles for those little key symbols in the controls -- */
+    .key-symbol {
+      display: inline-block;
+      font-weight: bold;
+      padding: 3px 6px;
+      background-color: #fff;
+      border: 1px solid var(--medium-gray);
+      border-radius: 4px;
+      margin-right: 8px;
+      min-width: 20px; 
+      text-align: center;
+      box-shadow: 1px 1px 1px rgba(0,0,0,0.1);
+      color: #333;
+    }
+    
+    /* -- New box for explaining the game's objective -- */
+    #goalBox {
+        padding: 10px;
+        border: 1px dashed var(--dark-green);
+        border-radius: 5px;
+        background-color: #e9f5f8; /* A very light, almost white-blue */
+    }
+    #goalBox p {
+        font-size: 0.85em;
+        line-height: 1.4;
+        color: var(--dark-green);
+        text-align: left; /* Keep goal text aligned left, not inheriting center from h4 */
+        display: block; /* Override flex from parent if needed */
+    }
+
+
+    /* -- Our brave little water bottle -- */
+    #player {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      background: url('https://cdn.pixabay.com/photo/2019/04/14/15/37/bottledwater-4127009_960_720.png') center/contain no-repeat;
+      z-index: 2; /* Make sure player is above bullets (z-index 1) if they overlap at spawn */
+    }
+
+    /* -- The water shots! Pew pew! -- */
+    .bullet {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background-color: var(--blue); 
+      border-radius: 50%; /* Perfect circle */
+      z-index: 1;
+    }
+
+    /* -- The nasty bacteria trying to contaminate our water -- */
+    .enemy {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      background: url('https://cdn.pixabay.com/photo/2013/07/13/11/25/germ-158107_960_720.png') center/contain no-repeat;
+      z-index: 2;
+    }
+
+    /* -- Container for UI elements below the game (score, health, buttons) -- */
+    .ui-element-container { 
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px; 
+    }
+
+    #scoreDisplay {
+      font-size: 1.2rem;
+      color: var(--blue); 
+    }
+
+    #healthDisplay {
+      font-size: 1rem;
+      color: var(--red); 
+    }
+
+    /* -- Holds the Reset and "Help the cause!" buttons in a row -- */
+    #actionButtonsContainer {
+      display: flex;
+      gap: 10px; 
+      margin-top: 10px; 
+    }
+
+    #resetButton, .charity-link-button { 
+      padding: 10px 20px;
+      border: none;
+      font-weight: bold;
+      color: white; 
+      cursor: pointer;
+      border-radius: 5px;
+      text-decoration: none; /* So our link-button doesn't have an underline */
+      display: inline-block;
+      font-size: 0.9em;
+    }
+
+    #resetButton {
+      background-color: var(--yellow); 
+      color: #333; /* Darker text for yellow button, for readability */
+    }
+    
+    .charity-link-button { 
+      background-color: var(--green);
+    }
+
+
+    #footer {
+      margin-top: 20px; 
+      font-size: 0.9rem;
+      color: var(--dark-green); 
+    }
+
+    /* -- The "Game Over" popup screen. Sad times, but it happens. -- */
+    #gameOverPopup {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%); /* CSS magic to perfectly center the popup */
+      background: white;
+      border: 3px solid var(--blue); 
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      display: none; /* Hidden by default, JS will show it */
+      z-index: 5; /* On top of everything else! */
+    }
+
+    #gameOverPopup h2 {
+      color: var(--red); 
+      margin-bottom: 10px;
+    }
+    #gameOverPopup p {
+      margin-bottom: 10px;
+    }
+
+    #gameOverPopup button, #gameOverPopup .charity-link-button {
+      margin-top: 10px;
+      padding: 8px 16px;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      text-decoration: none; 
+      display: inline-block; 
+    }
+     #gameOverPopup button { /* The "Retry" button in the popup */
+        background-color: var(--blue);
+     }
+    /* The .charity-link-button in the popup inherits general .charity-link-button styles (green background) */
+
+
+    /* -- Gives the screen a little shake when the player gets hit. Ouch! -- */
+    .rumble {
+      animation: screenRumble 0.3s ease-in-out;
+    }
+
+    @keyframes screenRumble { /* Defining the shake animation steps */
+      0%, 100% { transform: translate(0, 0) rotate(0); }
+      20% { transform: translate(-4px, -2px) rotate(-0.5deg); }
+      40% { transform: translate(4px, 2px) rotate(0.5deg); }
+      60% { transform: translate(-3px, -1px) rotate(-0.3deg); }
+      80% { transform: translate(3px, 1px) rotate(0.3deg); }
+    }
+
+    /* -- Pretty confetti for when we blast those baddies! -- */
+    .confetti-piece {
+      position: absolute;
+      width: 7px;
+      height: 12px;
+      opacity: 0; 
+      z-index: 3; /* Above player/enemy, but below the game over popup */
+      animation: confetti-fall 1s ease-out forwards;
+    }
+
+    @keyframes confetti-fall { /* How the confetti tumbles down */
+      0% {
+        opacity: 1;
+        transform: translateY(0px) rotateZ(0deg) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(70px) rotateZ(360deg) scale(0.3); /* Fall, spin, and shrink */
+      }
+    }
+
+    /* -- Making things look decent on smaller screens (responsive adjustments) -- */
+    @media (max-width: 768px) { /* This breakpoint might need tweaking depending on content */
+        #gameAndControlsWrapper {
+            flex-direction: column; /* Stack game and controls vertically */
+            align-items: center; 
+        }
+        #sideControlsBox {
+            width: 90%; 
+            max-width: 350px; /* Let controls box be a bit wider if needed */
+            margin-top: 15px; 
+        }
+        #game {
+             max-width: 90vw; /* Let game area also use more of the viewport width */
+        }
+    }
+  </style>
 </head>
 <body>
-    <h1>Welcome to the Charity Water Game Prototype</h1>
-    <script src="script.js"></script>
+  <h1 id="gameTitle">Water Warrior: Survival Stream</h1>
+
+  <div id="gameAndControlsWrapper">
+    <div id="game">
+      <div id="player"></div>
+      <div id="gameOverPopup">
+        <h2>Game Over!</h2>
+        <p>The water was contaminated!</p> 
+        <p id="finalScore"></p>
+        <button onclick="resetGame()">Retry</button>
+        <a href="https://www.charitywater.org" target="_blank" class="charity-link-button">Help the cause!</a> 
+      </div>
+    </div>
+
+    <div id="sideControlsBox">
+      <h3>Controls</h3>
+      <p><span class="key-symbol">↑</span> Move Up</p>
+      <p><span class="key-symbol">↓</span> Move Down</p>
+      <p><span class="key-symbol">←</span> Move Left</p>
+      <p><span class="key-symbol">→</span> Move Right</p>
+      <p><span class="key-symbol">[SPACE]</span> Shoot</p>
+      
+      <!-- New Goal Box -->
+      <h4>Game Goal</h4>
+      <div id="goalBox">
+        <p>Your mission, Water Warrior, is to survive the stream! Shoot the nasty bacteria before they contaminate you. Keep your hearts and aim for a high score!</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="ui-element-container">
+    <div id="scoreDisplay">Score: 0</div>
+    <div id="healthDisplay">Hearts: ♥♥♥</div>
+    <div id="actionButtonsContainer">
+      <button id="resetButton">Reset</button>
+      <a href="https://www.charitywater.org" target="_blank" class="charity-link-button">Help the cause!</a>
+    </div>
+  </div>
+
+  <div id="footer">Built with ❤️ for charity: water</div>
+
+  <!-- Audio Elements: Replace src with your actual sound file paths if these example ones don't work or if you want custom sounds! -->
+  <audio id="shootSound" src="https://actions.google.com/sounds/v1/impacts/water_splash.ogg" preload="auto"></audio>
+  <audio id="destroySound" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg" preload="auto"></audio>
+  <audio id="hitSound" src="https://actions.google.com/sounds/v1/impacts/hit_medium_hard.ogg" preload="auto"></audio>
+  <audio id="gameOverSound" src="https://actions.google.com/sounds/v1/cartoon/descending_saw.ogg" preload="auto"></audio>
+  <audio id="backgroundMusic" src="https://actions.google.com/sounds/v1/ambient/water_droplets_loop.ogg" preload="auto" loop></audio>
+
+
+  <script>
+    // -- Grabbing all the HTML elements we'll need to mess with. It's like our cast of characters! --
+    const player = document.getElementById('player');
+    const game = document.getElementById('game');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const healthDisplay = document.getElementById('healthDisplay');
+    const resetButtonElement = document.getElementById('resetButton'); // Named it "Element" to not clash with the resetGame function
+    const gameOverPopup = document.getElementById('gameOverPopup');
+    const finalScore = document.getElementById('finalScore');
+
+    // -- Audio element buddies for all our sound needs --
+    const shootAudio = document.getElementById('shootSound');
+    const destroyAudio = document.getElementById('destroySound');
+    const hitAudio = document.getElementById('hitSound');
+    const gameOverAudio = document.getElementById('gameOverSound');
+    const backgroundMusicAudio = document.getElementById('backgroundMusic');
+    // -- Let's not make the background music too loud, eh? 30% volume sounds about right. --
+    backgroundMusicAudio.volume = 0.3; 
+
+
+    // -- Game state variables. These are the brains of the operation. --
+    let score; // Player's current score
+    let health; // How many hits our player can take
+    let playerX, playerY; // Player's coordinates on the screen
+    const speed = 10; // How fast the player zips around
+    let enemyInterval; // The timer that keeps spawning those pesky enemies
+    let gameActive = false; // Is the game currently running or paused/over?
+
+    // -- For making our confetti nice and colorful, using our brand colors! --
+    const confettiColors = [
+        'var(--yellow)', 'var(--blue)', 'var(--green)', 
+        'var(--orange)', 'var(--pink)', 'var(--red)'
+    ];
+
+    // -- Helper function to play sound effects. Allows them to be re-triggered quickly. --
+    // -- It's like, "Hey browser, play this sound, and if it's already playing, start it over!" --
+    function playSfx(audioElement) {
+        if (!audioElement) return; // Safety first! Don't try to play nothing.
+        audioElement.currentTime = 0; // Rewind to the beginning
+        audioElement.play().catch(error => console.warn("SFX play error (don't worry, probably just browser autoplay rules):", error)); 
+    }
+
+    // -- Makes our little water bottle dude actually move on screen --
+    // Updates the player's div style.left and style.top based on playerX and playerY vars.
+    const updatePlayerPosition = () => {
+      if (typeof playerX === 'number' && typeof playerY === 'number') { // Just a sanity check
+        player.style.left = `${playerX}px`;
+        player.style.top = `${playerY}px`;
+      }
+    };
+
+    // -- Let the confetti fly! Called when an enemy is destroyed. --
+    function createConfetti(x, y, sourceElement) {
+        const numPieces = 15; // How much confetti? This much!
+        const sourceWidth = sourceElement ? sourceElement.offsetWidth : 32; // Get width of what we're 'sploding
+        const sourceHeight = sourceElement ? sourceElement.offsetHeight : 32;
+        const centerX = x + sourceWidth / 2; // Center of the explosion
+        const centerY = y + sourceHeight / 2;
+
+        for (let i = 0; i < numPieces; i++) {
+            const piece = document.createElement('div');
+            piece.classList.add('confetti-piece'); // So it gets styled by CSS
+
+            const pieceWidth = 7; 
+            const pieceHeight = 12;
+
+            // Sprinkle them around the center point
+            piece.style.left = `${centerX + (Math.random() - 0.5) * sourceWidth * 0.9 - pieceWidth / 2}px`;
+            piece.style.top = `${centerY + (Math.random() - 0.5) * sourceHeight * 0.9 - pieceHeight / 2}px`;
+            
+            piece.style.backgroundColor = confettiColors[Math.floor(Math.random() * confettiColors.length)]; // Random brand color!
+            
+            // Give each piece a bit of random flair
+            const initialRotation = Math.random() * 360;
+            const initialScale = Math.random() * 0.5 + 0.7; 
+            piece.style.transform = `rotateZ(${initialRotation}deg) scale(${initialScale})`;
+            
+            piece.style.animationDelay = `${Math.random() * 0.2}s`; // Stagger their fall a bit
+            
+            game.appendChild(piece); // Add to the game screen
+
+            // -- Clean up after the party: remove confetti after it has animated and fallen --
+            setTimeout(() => {
+                if (piece.parentElement) piece.remove(); // Only remove if it's still there
+            }, 1250); // Animation is 1s + max 0.2s delay
+        }
+    }
+
+    // -- Adds a quick shake to the game screen. Used when player gets hit. --
+    function triggerRumble() {
+        if (!game.classList.contains('rumble')) { // Don't add if already rumbling
+            game.classList.add('rumble');
+            // Remove the rumble class after the animation is done so it can be triggered again.
+            setTimeout(() => game.classList.remove('rumble'), 300); // 300ms is the animation duration
+        }
+    }
+
+    // -- Player shoots a water bullet. Pew pew! --
+    const shoot = () => {
+      if (!gameActive || health <= 0) return; // Can't shoot if game's not active or player's a goner.
+      playSfx(shootAudio); 
+      const bullet = document.createElement('div');
+      bullet.classList.add('bullet');
+      // Position the bullet to come from the center-top of the player
+      const bulletWidth = bullet.offsetWidth || 8; 
+      bullet.style.left = `${playerX + player.offsetWidth / 2 - bulletWidth / 2}px`;
+      bullet.style.top = `${playerY}px`;
+      game.appendChild(bullet);
+
+      // -- Now, make the bullet fly upwards and check for hits --
+      const move = setInterval(() => {
+        if (!bullet.parentElement) { // Bullet might have been removed (e.g., hit something)
+          clearInterval(move); // Stop its movement interval if it's gone
+          return;
+        }
+        bullet.style.top = `${bullet.offsetTop - 5}px`; // Move it up
+
+        // -- Check collision with every single enemy on screen. A bit brute-force, but works for this scale! --
+        const enemies = document.querySelectorAll('.enemy');
+        enemies.forEach(enemy => {
+          if (!enemy.parentElement) return; // Skip if enemy already poofed
+
+          // -- The classic bounding box collision detection math. If all these are true, it's a hit! --
+          if (
+            bullet.offsetTop < enemy.offsetTop + enemy.offsetHeight &&
+            bullet.offsetTop + bullet.offsetHeight > enemy.offsetTop &&
+            bullet.offsetLeft < enemy.offsetLeft + enemy.offsetWidth &&
+            bullet.offsetLeft + bullet.offsetWidth > enemy.offsetLeft
+          ) {
+            // -- Got 'em! Time for some celebratory confetti and a point bump. --
+            playSfx(destroyAudio);
+            createConfetti(enemy.offsetLeft, enemy.offsetTop, enemy); 
+            bullet.remove(); // Bye-bye bullet
+            enemy.remove();  // And bye-bye baddie
+            clearInterval(move); // Stop this bullet, its job is done.
+            score += 10;
+            scoreDisplay.textContent = `Score: ${score}`;
+          }
+        });
+
+        // -- If bullet flies off the top of the screen, clean it up --
+        if (bullet.offsetTop < -bullet.offsetHeight) { // -offsetHeight to ensure it's fully off
+          bullet.remove();
+          clearInterval(move);
+        }
+      }, 16); // ~60 FPS for smooth bullet movement
+    };
+
+    // -- Spawns a new enemy at the top of the screen at a random horizontal position --
+    const spawnEnemy = () => {
+      if (!gameActive || health <= 0) return; // No new enemies if game's over or paused.
+      const enemy = document.createElement('div');
+      enemy.classList.add('enemy');
+      const enemyWidth = enemy.offsetWidth || 32; 
+      enemy.style.left = `${Math.random() * (game.offsetWidth - enemyWidth)}px`; // Random X
+      enemy.style.top = `0px`; // Start at the very top
+      game.appendChild(enemy);
+
+      // -- Make the enemy slowly drift downwards and check for player collision --
+      const moveEnemy = setInterval(() => {
+        if (!enemy.parentElement) { // Enemy might have been shot
+          clearInterval(moveEnemy);
+          return;
+        }
+        if (!gameActive) { // If game state changes mid-flight (e.g., game over)
+            clearInterval(moveEnemy);
+            if (enemy.parentElement) enemy.remove(); // Clean up existing enemy
+            return;
+        }
+        enemy.style.top = `${enemy.offsetTop + 2}px`; // Move it down
+
+        // -- Collision check with player. Same bounding box logic as bullets vs enemies. --
+        if (
+          enemy.offsetTop < playerY + player.offsetHeight &&
+          enemy.offsetTop + enemy.offsetHeight > playerY &&
+          enemy.offsetLeft < playerX + player.offsetWidth &&
+          enemy.offsetLeft + enemy.offsetWidth > playerX
+        ) {
+          // -- Ouch! Player got hit. Play sound, rumble screen, lose a heart. --
+          playSfx(hitAudio); 
+          triggerRumble(); 
+          if (enemy.parentElement) enemy.remove(); // Enemy disappears after hitting
+          clearInterval(moveEnemy);
+          health--;
+          updateHealth();
+          if (health <= 0) { // No more hearts? Game over, man!
+            gameOver();
+          }
+        }
+
+        // -- If enemy drifts off the bottom of the screen, clean it up --
+        if (enemy.offsetTop > game.offsetHeight) {
+          if (enemy.parentElement) enemy.remove();
+          clearInterval(moveEnemy);
+        }
+      }, 50); // Enemy speed (lower interval time = faster, higher value = slower)
+    };
+
+    // -- Updates the heart display based on current health --
+    const updateHealth = () => {
+      healthDisplay.textContent = 'Hearts: ' + (health > 0 ? '♥'.repeat(health) : 'None'); // Show hearts or "None"
+    };
+
+    // -- It's all over... This function handles the game over sequence. --
+    const gameOver = () => {
+      gameActive = false; // Stop game logic
+      backgroundMusicAudio.pause(); // Silence that background tune
+      playSfx(gameOverAudio); // Play the sad trombone (or equivalent)
+      finalScore.textContent = `Your score was: ${score}`; // Show final score
+      gameOverPopup.style.display = 'block'; // Bring up the game over screen
+      if (enemyInterval) clearInterval(enemyInterval); // Stop new enemies from spawning
+
+      // -- Clean up any leftover game elements like bullets, enemies, or confetti --
+      document.querySelectorAll('.enemy, .bullet, .confetti-piece').forEach(el => {
+          if (el.parentElement) el.remove();
+      });
+    };
+
+    // -- Listens for keyboard presses to control the player and shoot --
+    document.addEventListener('keydown', (e) => {
+      if (!gameActive || health <= 0) return; // Ignore input if game isn't active
+      let moved = false;
+      // -- Arrow key movement. Check boundaries so player doesn't fly off screen. --
+      if (e.key === 'ArrowLeft') { playerX -= speed; moved = true; }
+      if (e.key === 'ArrowRight') { playerX += speed; moved = true; }
+      if (e.key === 'ArrowUp') { playerY -= speed; moved = true; }
+      if (e.key === 'ArrowDown') { playerY += speed; moved = true; }
+      
+      if (moved) {
+        // -- Clamp player position to keep them within game bounds. No cheating! --
+        playerX = Math.max(0, Math.min(playerX, game.offsetWidth - player.offsetWidth));
+        playerY = Math.max(0, Math.min(playerY, game.offsetHeight - player.offsetHeight));
+        updatePlayerPosition(); // Actually move the player's div
+      }
+      if (e.key === ' ') { // Spacebar for shooting
+        e.preventDefault(); // Stop spacebar from scrolling the page, which it loves to do
+        shoot();
+      }
+    });
+
+    // -- Resets the game to its initial state. Let's play again! --
+    function resetGame() {
+      gameActive = false; // Temporarily pause game logic during reset
+      if (enemyInterval) clearInterval(enemyInterval); // Stop any old enemy spawners
+
+      // -- Clear the battlefield! Remove all existing enemies, bullets, and confetti. --
+      document.querySelectorAll('.enemy, .bullet, .confetti-piece').forEach(el => {
+        if (el.parentElement) el.remove()
+      });
+
+      // -- Reset scores, health, and player position --
+      score = 0;
+      health = 3;
+      scoreDisplay.textContent = `Score: ${score}`;
+      updateHealth();
+      
+      // Get player dimensions (or use defaults if not available yet)
+      const playerWidth = player.offsetWidth || 32;
+      const playerHeight = player.offsetHeight || 32;
+      playerX = game.offsetWidth / 2 - playerWidth / 2; // Center horizontally
+      playerY = game.offsetHeight - 100; // Start near the bottom
+      
+      // Ensure initial position is valid
+      playerX = Math.max(0, Math.min(playerX, game.offsetWidth - playerWidth));
+      playerY = Math.max(0, Math.min(playerY, game.offsetHeight - playerHeight));
+      
+      updatePlayerPosition(); 
+      player.style.display = 'block'; // Make sure player is visible
+
+      gameOverPopup.style.display = 'none'; // Hide the game over screen
+      game.classList.remove('rumble'); // Clear any lingering rumble effect
+      gameActive = true; // Game on!
+      
+      // -- Crank up the background music (or try to, browsers can be picky about autoplay) --
+      backgroundMusicAudio.play().catch(error => console.warn("Background music play error on reset (browser might be blocking autoplay initially):", error));
+      
+      // -- Start spawning those enemies again! --
+      enemyInterval = setInterval(spawnEnemy, 2000); // New enemy every 2 seconds
+    }
+
+    // -- Wire up the "Reset" button to our resetGame function --
+    resetButtonElement.addEventListener('click', resetGame);
+
+    // -- When the whole page is loaded, set up and start the game. --
+    window.onload = () => {
+      // -- A tiny delay. Sometimes helps ensure everything's REALLY ready before we start. --
+      setTimeout(() => {
+        player.style.display = 'none'; // Hide player briefly to avoid visual jump if dimensions aren't final
+        resetGame(); // Kick off the game!
+      }, 50); 
+    };
+  </script>
 </body>
 </html>
