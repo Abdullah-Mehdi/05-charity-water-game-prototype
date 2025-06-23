@@ -27,7 +27,7 @@
     }
 
     body {
-      font-family: sans-serif;
+      font-family: Georgia, 'Proxima Nova', 'Avenir', Arial, Helvetica, sans-serif;
       background-color: var(--light-blue); 
       display: flex; /* Flexbox all the things for easy centering and layout! */
       flex-direction: column;
@@ -58,7 +58,7 @@
       display: flex;
       flex-direction: row;
       align-items: flex-start; /* Keeps them aligned at the top */
-      gap: 20px; 
+      gap: 20px;  /* Space between game and controls */
       margin-bottom: 15px;
       max-width: calc(500px + 180px + 20px); /* Game width + Controls width + gap */
       width: 100%; 
@@ -94,9 +94,12 @@
       margin-bottom: 10px;
       color: var(--blue);
     }
-    #sideControlsBox h4 { /* Slightly different for the "Goal" title */
-        color: var(--green);
+    #sideControlsBox h4 { 
+        color: var(--blue);
         margin-top: 20px; /* Space above the goal box */
+    }
+    #difficultyContainer label {
+        color: var(--blue);
     }
 
     #sideControlsBox p {
@@ -256,6 +259,26 @@
      }
     /* The .charity-link-button in the popup inherits general .charity-link-button styles (green background) */
 
+    /* Encouragement message styling */
+    #encouragementMessage {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--yellow);
+      color: var(--blue);
+      font-family: 'Proxima Nova', 'Avenir', Arial, Helvetica, sans-serif;
+      font-size: 1.1em;
+      padding: 12px 28px;
+      border-radius: 8px;
+      border: 2px solid var(--blue);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      z-index: 100;
+      text-align: center;
+      min-width: 200px;
+      max-width: 90vw;
+      pointer-events: none; /* So it never blocks gameplay! */
+    }
 
     /* -- Gives the screen a little shake when the player gets hit. Ouch! -- */
     .rumble {
@@ -324,6 +347,16 @@
     </div>
 
     <div id="sideControlsBox">
+              <!-- Difficulty Selection -->
+    <div id="difficultyContainer" style="margin-bottom: 15px;">
+      <label for="difficultySelect"><strong>Difficulty:</strong></label>
+      <select id="difficultySelect">
+        <option value="easy">Easy</option>
+        <option value="normal" selected>Normal</option>
+        <option value="hard">Hard</option>
+      </select>
+    </div>
+
       <h3>Controls</h3>
       <p><span class="key-symbol">↑</span> Move Up</p>
       <p><span class="key-symbol">↓</span> Move Down</p>
@@ -367,6 +400,7 @@
     const resetButtonElement = document.getElementById('resetButton'); // Named it "Element" to not clash with the resetGame function
     const gameOverPopup = document.getElementById('gameOverPopup');
     const finalScore = document.getElementById('finalScore');
+    const difficultySelect = document.getElementById('difficultySelect');
 
     // -- Audio element buddies for all our sound needs --
     const shootAudio = document.getElementById('shootSound');
@@ -385,6 +419,10 @@
     const speed = 10; // How fast the player zips around
     let enemyInterval; // The timer that keeps spawning those pesky enemies
     let gameActive = false; // Is the game currently running or paused/over?
+
+    // -- Difficulty settings --
+    let enemySpawnRate = 2000; // Default for 'normal'
+    let playerStartHealth = 3;
 
     // -- For making our confetti nice and colorful, using our brand colors! --
     const confettiColors = [
@@ -495,6 +533,14 @@
             clearInterval(move); // Stop this bullet, its job is done.
             score += 10;
             scoreDisplay.textContent = `Score: ${score}`;
+
+            // Show encouragement if a milestone is reached and not already shown
+            encouragements.forEach(item => {
+              if (score >= item.score && !encouragementShown[item.score]) {
+                showEncouragement(item.message);
+                encouragementShown[item.score] = true;
+              }
+            });
           }
         });
 
@@ -576,7 +622,26 @@
       });
     };
 
-    // -- Listens for keyboard presses to control the player and shoot --
+    // -- Encouragement messages at score milestones --
+const encouragements = [
+  { score: 20, message: "Great start! Keep going, Water Warrior!" },
+  { score: 50, message: "Awesome! You're making a real difference!" },
+  { score: 100, message: "Incredible! The villagers are cheering for you!" },
+  { score: 200, message: "You're a true Water Hero!" }
+];
+let encouragementShown = {}; // Track which messages have been shown
+
+function showEncouragement(msg) {
+  const msgDiv = document.getElementById('encouragementMessage');
+  msgDiv.textContent = msg;
+  msgDiv.style.display = 'block';
+  // Hide after 2 seconds
+  setTimeout(() => {
+    msgDiv.style.display = 'none';
+  }, 2000);
+}
+
+// -- Listens for keyboard presses to control the player and shoot --
     document.addEventListener('keydown', (e) => {
       if (!gameActive || health <= 0) return; // Ignore input if game isn't active
       let moved = false;
@@ -600,46 +665,56 @@
 
     // -- Resets the game to its initial state. Let's play again! --
     function resetGame() {
-      gameActive = false; // Temporarily pause game logic during reset
-      if (enemyInterval) clearInterval(enemyInterval); // Stop any old enemy spawners
+      setDifficultySettings(); // Set difficulty before resetting
+      gameActive = false;
+      if (enemyInterval) clearInterval(enemyInterval);
 
-      // -- Clear the battlefield! Remove all existing enemies, bullets, and confetti. --
       document.querySelectorAll('.enemy, .bullet, .confetti-piece').forEach(el => {
         if (el.parentElement) el.remove()
       });
 
-      // -- Reset scores, health, and player position --
       score = 0;
-      health = 3;
+      health = playerStartHealth; // Use the variable set by difficulty
       scoreDisplay.textContent = `Score: ${score}`;
       updateHealth();
-      
-      // Get player dimensions (or use defaults if not available yet)
+
       const playerWidth = player.offsetWidth || 32;
       const playerHeight = player.offsetHeight || 32;
-      playerX = game.offsetWidth / 2 - playerWidth / 2; // Center horizontally
-      playerY = game.offsetHeight - 100; // Start near the bottom
-      
-      // Ensure initial position is valid
+      playerX = game.offsetWidth / 2 - playerWidth / 2;
+      playerY = game.offsetHeight - 100;
       playerX = Math.max(0, Math.min(playerX, game.offsetWidth - playerWidth));
       playerY = Math.max(0, Math.min(playerY, game.offsetHeight - playerHeight));
-      
-      updatePlayerPosition(); 
-      player.style.display = 'block'; // Make sure player is visible
+      updatePlayerPosition();
+      player.style.display = 'block';
 
-      gameOverPopup.style.display = 'none'; // Hide the game over screen
-      game.classList.remove('rumble'); // Clear any lingering rumble effect
-      gameActive = true; // Game on!
-      
-      // -- Crank up the background music (or try to, browsers can be picky about autoplay) --
+      gameOverPopup.style.display = 'none';
+      game.classList.remove('rumble');
+      gameActive = true;
+
       backgroundMusicAudio.play().catch(error => console.warn("Background music play error on reset (browser might be blocking autoplay initially):", error));
-      
-      // -- Start spawning those enemies again! --
-      enemyInterval = setInterval(spawnEnemy, 2000); // New enemy every 2 seconds
+
+      enemyInterval = setInterval(spawnEnemy, enemySpawnRate); // Use the variable set by difficulty
+    }
+
+    // -- Set variables based on selected difficulty --
+    function setDifficultySettings() {
+      const difficultySelect = document.getElementById('difficultySelect');
+      const difficulty = difficultySelect ? difficultySelect.value : 'normal';
+      if (difficulty === 'easy') {
+        enemySpawnRate = 3000; // slower enemies
+        playerStartHealth = 5;
+      } else if (difficulty === 'hard') {
+        enemySpawnRate = 1200; // faster enemies
+        playerStartHealth = 2;
+      } else {
+        enemySpawnRate = 2000;
+        playerStartHealth = 3;
+      }
     }
 
     // -- Wire up the "Reset" button to our resetGame function --
     resetButtonElement.addEventListener('click', resetGame);
+    document.getElementById('difficultySelect').addEventListener('change', resetGame);
 
     // -- When the whole page is loaded, set up and start the game. --
     window.onload = () => {
@@ -650,5 +725,8 @@
       }, 50); 
     };
   </script>
+
+  <!-- Add this just before </body> -->
+  <div id="encouragementMessage" style="display:none;"></div>
 </body>
 </html>
